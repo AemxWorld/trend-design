@@ -384,7 +384,7 @@
     const text = encodeURIComponent(
       `مرحباً، أنا ${name}.\nنوع المشروع: ${projectType || "—"}\n${message || ""}\nرقم التواصل: ${phone}`
     );
-    window.open(`https://wa.me/966564948979?text=${text}`, "_blank");
+    window.open(`https://wa.me/966100000000000?text=${text}`, "_blank");
   });
 
   /* ─── GSAP animations ─── */
