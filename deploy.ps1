@@ -1,4 +1,4 @@
-# Trend Design — publish to GitHub Pages
+# Trend Design - publish to GitHub Pages
 # Run once: gh auth login
 # Then run: .\deploy.ps1
 
@@ -15,28 +15,68 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $repoName = "trend-design"
-$remote = & $git remote get-url origin 2>$null
+$branch = (& $git branch --show-current).Trim()
+if (-not $branch) { $branch = "master" }
 
-if (-not $remote) {
-  Write-Host "Creating GitHub repo and pushing..." -ForegroundColor Cyan
-  & $gh repo create $repoName --public --source=. --remote=origin --push
-} else {
-  Write-Host "Pushing to origin..." -ForegroundColor Cyan
-  & $git push -u origin master
+$user = & $gh api user --jq .login
+$repoExists = $false
+
+& $gh repo view "${user}/${repoName}" 2>$null | Out-Null
+if ($LASTEXITCODE -eq 0) { $repoExists = $true }
+
+$remotes = @(& $git remote 2>$null)
+$hasOrigin = $remotes -contains "origin"
+
+if ($hasOrigin -and -not $repoExists) {
+  Write-Host "Removing broken origin remote..." -ForegroundColor Yellow
+  & $git remote remove origin
+  $hasOrigin = $false
 }
 
-Write-Host "Enabling GitHub Pages..." -ForegroundColor Cyan
-& $gh api -X POST "/repos/{owner}/$repoName/pages" -f "build_type=workflow" 2>$null
+if (-not $repoExists) {
+  Write-Host "Creating GitHub repo ${user}/${repoName}..." -ForegroundColor Cyan
+  if (-not $hasOrigin) {
+    & $gh repo create $repoName --public --description "Trend Design client preview site"
+    & $git remote add origin "https://github.com/${user}/${repoName}.git"
+  }
+} else {
+  Write-Host "Repo already exists on GitHub." -ForegroundColor Cyan
+  if (-not $hasOrigin) {
+    & $git remote add origin "https://github.com/${user}/${repoName}.git"
+  }
+}
 
-$pagesUrl = & $gh api "/repos/{owner}/$repoName/pages" --jq .html_url 2>$null
+Write-Host "Pushing branch $branch..." -ForegroundColor Cyan
+& $git push -u origin $branch
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Push failed. Check errors above." -ForegroundColor Red
+  exit 1
+}
+
+Write-Host "Enabling GitHub Pages (branch deploy)..." -ForegroundColor Cyan
+$pagesResult = & $gh api -X PUT "/repos/${user}/${repoName}/pages" `
+  -f "build_type=legacy" `
+  -f "source[branch]=$branch" `
+  -f "source[path]=/" 2>&1
+
+if ($LASTEXITCODE -ne 0 -and $pagesResult -notmatch "already") {
+  Write-Host $pagesResult -ForegroundColor Yellow
+}
+
+Start-Sleep -Seconds 2
+$pagesUrl = & $gh api "/repos/${user}/${repoName}/pages" --jq .html_url 2>$null
+
+Write-Host ""
+Write-Host "Deploy complete!" -ForegroundColor Green
 if ($pagesUrl) {
-  Write-Host ""
-  Write-Host "Live site (may take 1-2 min after first deploy):" -ForegroundColor Green
+  Write-Host "Live site:" -ForegroundColor Green
   Write-Host $pagesUrl
+  Write-Host "(May take 1-2 minutes to go live after first publish.)" -ForegroundColor DarkGray
 } else {
-  $user = & $gh api user --jq .login
-  Write-Host ""
-  Write-Host "Repo pushed. Enable Pages in GitHub:" -ForegroundColor Green
-  Write-Host "https://github.com/$user/$repoName/settings/pages"
-  Write-Host "Source: GitHub Actions"
+  Write-Host "Check Pages settings:" -ForegroundColor Green
+  Write-Host "https://github.com/${user}/${repoName}/settings/pages"
 }
+
+Write-Host ""
+Write-Host "Repository:" -ForegroundColor Green
+Write-Host "https://github.com/${user}/${repoName}"
