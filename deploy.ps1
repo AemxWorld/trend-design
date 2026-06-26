@@ -22,7 +22,7 @@ if (-not $remote) {
   & $gh repo create $repoName --public --source=. --remote=origin --push
 } else {
   Write-Host "Pushing to origin..." -ForegroundColor Cyan
-  & $git push -u origin main
+  & $git push -u origin master
 }
 
 Write-Host "Enabling GitHub Pages..." -ForegroundColor Cyan
